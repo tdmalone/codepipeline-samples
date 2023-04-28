@@ -1250,8 +1250,13 @@ Resources:
       Timeout: 3
       Code:
         ZipFile: |
+          import boto3
+
+
           def handler(event, context):
-            pass
+            boto3.client('codepipeline').put_job_success_result(
+              jobId=event['CodePipeline.job']['id']
+            )
 
   # StateMachine:
   #   Type: AWS::StepFunctions::StateMachine
