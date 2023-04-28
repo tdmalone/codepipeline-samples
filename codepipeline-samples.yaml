@@ -1374,8 +1374,8 @@ Resources:
 
               - Effect: Allow
                 Action:
-                  - s3:GetObject
-                  - s3:PutObject
+                  - s3:GetObject*
+                  - s3:PutObject*
                 Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}/*
 
   CodePipelineRole:
@@ -1425,8 +1425,12 @@ Resources:
                     iam:PassedToService: cloudformation.amazonaws.com
 
               - Effect: Allow
+                Action: s3:GetBucket*
+                Resource: !GetAtt ArtifactsBucket.Arn
+
+              - Effect: Allow
                 Action:
-                  - s3:GetObject
+                  - s3:GetObject*
                   - s3:PutObject*
                 Resource: !Sub ${ArtifactsBucket.Arn}/*
 
@@ -1438,9 +1442,9 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
-            Action: sts:AssumeRole
             Principal:
               Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
       Policies:
         - PolicyName: root
           PolicyDocument:
@@ -1449,15 +1453,17 @@ Resources:
 
               - Effect: Allow
                 Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Namespace}-*
-
-              - Effect: Allow
-                Action:
+                  - codepipeline:PutJob*Result
+                  - logs:CreateLogGroup
                   - xray:PutTelemetryRecords
                   - xray:PutTraceSegments
                 Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Namespace}-*
 
   # StateMachineRole:
   #   Type: AWS::IAM::Role
