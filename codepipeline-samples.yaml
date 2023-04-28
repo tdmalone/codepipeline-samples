@@ -20,32 +20,12 @@ Parameters:
 
 Resources:
 
-  # Source actions:
-  # - CodeStar Connections/GitHub
-  # - S3
-  #
-  # Build actions:
-  # - CodeBuild
-  #
-  # Deploy actions:
-  # - CloudFormation
-  # - cross-region CloudFormation
-  # - cross-account CloudFormation
-  # - CodeDeploy
-  # - S3
-  # - ECS
-  #
-  # Invoke actions:
-  # - Lambda
-  # - Step Functions
-  #
-  # Approve actions:
-  # - Manual approval
-
   #######################
   # Pipelines
   #######################
 
+  # Pipeline to deploy other pipelines.
+  # GitHub source action (via CodeStar Connections) + CloudFormation deployment action.
   MetaPipeline:
     Type: AWS::CodePipeline::Pipeline
     DependsOn: WaitForIAMResources
@@ -79,7 +59,7 @@ Resources:
 
         - Name: DeployStacks
           Actions:
-            - Name: DeployMetaPipeline
+            - Name: DeployPipelines
               InputArtifacts:
                 - Name: SourceOutput
               ActionTypeId:
@@ -88,54 +68,192 @@ Resources:
                 Provider: CloudFormation
                 Version: 1
               Configuration:
-                StackName: !Sub ${Namespace}-meta-pipeline
+                StackName: !Sub ${Namespace}-pipelines
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM
                 RoleArn: !GetAtt CloudFormationRole.Arn
                 TemplatePath: !Sub SourceOutput::${ThisTemplateFilename}
+              RunOrder: 1
 
-  # GoodPipeline:
-  #   Type: AWS::CodePipeline::Pipeline
-  #   Properties:
-  #     Stages:
-  #       - Actions:
-  #           - ActionTypeId:
-  #               Owner:
-  #               Category:
-  #               Version:
-  #               Provider:
-  #             Name:
-  #         Name:
-  #     RoleArn: !GetAtt CodePipelineRole.Arn
+  # A pipeline that should pretty much pass.
+  GoodPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-GOOD-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
 
-  # BadPipeline:
-  #   Type: AWS::CodePipeline::Pipeline
-  #   Properties:
-  #     Stages:
-  #       - Actions:
-  #           - ActionTypeId:
-  #               Owner:
-  #               Category:
-  #               Version:
-  #               Provider:
-  #             Name:
-  #         Name:
-  #     RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
 
-  # WaitingPipeline:
-  #   Type: AWS::CodePipeline::Pipeline
-  #   Properties:
-  #     Stages:
-  #       - Actions:
-  #           - ActionTypeId:
-  #               Owner:
-  #               Category:
-  #               Version:
-  #               Provider:
-  #             Name:
-  #         Name:
-  #     RoleArn: !GetAtt CodePipelineRole.Arn
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
 
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref GoodCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that should pretty much fail.
+  BadPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-BAD-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref BadCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that gives really flaky results.
+  FlakyPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-FLAKY-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref FlakyCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that will get stuck waiting on a manual approval action.
+  WaitingPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-WAITING-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Approval
+          Actions:
+            - Name: WaitForApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              RunOrder: 1
+
+  # S3 source action. CodeBuild build action. Lambda invoke action. Cross-region CloudFormation deploy action.
   # AssortedPipeline1:
   #   Type: AWS::CodePipeline::Pipeline
   #   Properties:
@@ -150,6 +268,7 @@ Resources:
   #         Name:
   #     RoleArn: !GetAtt CodePipelineRole.Arn
 
+  # Step Functions invoke action. Cross-account CloudFormation deploy action.
   # AssortedPipeline2:
   #   Type: AWS::CodePipeline::Pipeline
   #   Properties:
@@ -163,6 +282,25 @@ Resources:
   #             Name:
   #         Name:
   #     RoleArn: !GetAtt CodePipelineRole.Arn
+
+  # S3 deploy action.
+  # AssortedPipeline3:
+  #   Type: AWS::CodePipeline::Pipeline
+  #   Properties:
+  #     Stages:
+  #       - Actions:
+  #           - ActionTypeId:
+  #               Owner:
+  #               Category:
+  #               Version:
+  #               Provider:
+  #             Name:
+  #         Name:
+  #     RoleArn: !GetAtt CodePipelineRole.Arn
+
+  # TODO:
+  # - CodeDeploy deploy action
+  # - ECS deploy action
 
   #######################
   # Supporting resources
@@ -191,18 +329,75 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # CodeBuildProject:
-  #   Type: AWS::CodeBuild::Project
-  #   Properties:
-  #     Source:
-  #       Type:
-  #     ServiceRole: !GetAtt CodeBuildRole.Arn
-  #     Artifacts:
-  #       Type:
-  #     Environment:
-  #       Type:
-  #       Image:
-  #       ComputeType:
+  GoodCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-GOOD-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - true
+      TimeoutInMinutes: 5
+
+  BadCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-BAD-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - false
+      TimeoutInMinutes: 5
+
+  FlakyCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-FLAKY-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - RAND="$((0 + $RANDOM % 2))"  # Returns 0 or 1.
+                - if [[ "${RAND}" -eq 1 ]]; then true; else false; fi
+      TimeoutInMinutes: 5
 
   # CodeDeployApplication:
   #   Type: AWS::CodeDeploy::Application
@@ -262,11 +457,16 @@ Resources:
 
               - Effect: Allow
                 Action:
+                  - codebuild:CreateProject
+                  - codebuild:DeleteProject
+                  - codebuild:UpdateProject*
+                  - codepipeline:CreatePipeline
                   - codepipeline:DeletePipeline
                   - codepipeline:GetPipeline*
                   - codepipeline:StartPipelineExecution
                   - codepipeline:UpdatePipeline
                   - codestar-connections:CreateConnection
+                  - codestar-connections:DeleteConnection
                   - codestar-connections:GetConnection
                   - codestar-connections:ListTagsForResource
                   - codestar-connections:PassConnection
@@ -295,12 +495,38 @@ Resources:
                 Action: iam:PassRole
                 Resource:
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CodeBuildRole
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CodePipelineRole
 
-  # CodeBuildRole:
-  #   Type: AWS::IAM::Role
-  #   Properties:
-  #     AssumeRolePolicyDocument:
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Namespace}-CodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Namespace}-*
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}/*
 
   CodePipelineRole:
     Type: AWS::IAM::Role
@@ -335,6 +561,8 @@ Resources:
                   - cloudformation:ExecuteChangeSet
                   - cloudformation:SetStackPolicy
                   - cloudformation:ValidateTemplate
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
                 Resource: '*'
 
               - Effect: Allow
