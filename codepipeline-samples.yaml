@@ -92,7 +92,7 @@ Resources:
                 ActionMode: CREATE_UPDATE
                 Capabilities: CAPABILITY_NAMED_IAM
                 RoleArn: !GetAtt CloudFormationRole.Arn
-                TemplatePath: !Ref ThisTemplateFilename
+                TemplatePath: !Sub SourceOutput::${ThisTemplateFilename}
 
   # GoodPipeline:
   #   Type: AWS::CodePipeline::Pipeline
@@ -211,7 +211,7 @@ Resources:
   CodeStarConnection:
     Type: AWS::CodeStarConnections::Connection
     Properties:
-      ConnectionName: !Sub ${Namespace}-github-connection
+      ConnectionName: !Sub ${Namespace}-github
       ProviderType: GitHub
 
   # LambdaFunction:
@@ -294,7 +294,7 @@ Resources:
               - Effect: Allow
                 Action: iam:PassRole
                 Resource:
-                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationDeploymentRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationRole
                   - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CodePipelineRole
 
   # CodeBuildRole:
@@ -320,8 +320,8 @@ Resources:
             Statement:
 
               - Effect: Allow
-                Action: s3:GetObject
-                Resource: !Sub ${ArtifactsBucket.Arn}/*
+                Action: codestar-connections:UseConnection
+                Resource: !Ref CodeStarConnection
 
               - Effect: Allow
                 Action:
@@ -340,10 +340,16 @@ Resources:
               - Effect: Allow
                 Action: iam:PassRole
                 Resource:
-                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationDeploymentRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationRole
                 Condition:
                   StringEquals:
                     iam:PassedToService: cloudformation.amazonaws.com
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject*
+                Resource: !Sub ${ArtifactsBucket.Arn}/*
 
   # LambdaFunctionRole:
   #   Type: AWS::IAM::Role
