@@ -849,6 +849,242 @@ Resources:
                 FunctionName: !Ref LambdaFunction
               RunOrder: 4
 
+        - Name: MoreActions
+          Actions:
+
+            - Name: Action1
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action2
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action3
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action4
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action5
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+        - Name: EvenMoreActions
+          Actions:
+
+            - Name: Action1
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action2
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action3
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action4
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action5
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action6
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action7
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action8
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action9
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action10
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action11
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action12
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 4
+
+            - Name: Action13
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 5
+
+            - Name: Action14
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 6
+
+            - Name: Action15
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 7
+
+            - Name: Action16
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 8
+
+            - Name: Action17
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 9
+
+            - Name: Action18
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 10
+
   # S3 source action, Lambda invoke action.
   # TODO: Step Functions invoke action.
   # TODO: Cross-region & cross-account CloudFormation deploy actions.
