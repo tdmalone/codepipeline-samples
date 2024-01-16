@@ -1,0 +1,1471 @@
+---
+
+Parameters:
+
+  BranchName:
+    Type: String
+    Default: main
+
+  GitHubRepositoryPath:
+    Type: String
+    Default: tdmalone/codepipeline-samples
+
+  GitHubAdditionalRepositoryPath:
+    Type: String
+    Default: tdmalone/blank-repository
+
+  Namespace:
+    Type: String
+    Default: tim-codepipeline-samples
+
+  ThisTemplateFilename:
+    Type: String
+    Default: codepipeline-samples.yaml
+
+Resources:
+
+  #######################
+  # Pipelines
+  #######################
+
+  # Pipeline to deploy other pipelines.
+  # GitHub source action (via CodeStar Connections) + CloudFormation deployment action.
+  MetaPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    DependsOn: WaitForIAMResources
+    Properties:
+      Name: !Sub ${Namespace}-meta-pipeline
+      RestartExecutionOnUpdate: true
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: DeployStacks
+          Actions:
+            - Name: DeployPipelines
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: 1
+              Configuration:
+                StackName: !Sub ${Namespace}-pipelines
+                ActionMode: CREATE_UPDATE
+                Capabilities: CAPABILITY_NAMED_IAM
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                TemplatePath: !Sub SourceOutput::${ThisTemplateFilename}
+              RunOrder: 1
+
+  # A pipeline that should pretty much pass.
+  GoodPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-GOOD-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref GoodCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that should pretty much fail.
+  BadPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-BAD-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref BadCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that gives really flaky results.
+  FlakyPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-FLAKY-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Build
+          Actions:
+            - Name: Build
+              InputArtifacts:
+                - Name: SourceOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: 1
+              Configuration:
+                ProjectName: !Ref FlakyCodeBuildProject
+              OutputArtifacts:
+                - Name: BuildOutput
+              RunOrder: 1
+
+  # A pipeline that will get stuck waiting on a manual approval action.
+  WaitingPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-WAITING-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Approval
+          Actions:
+            - Name: WaitForApproval
+              ActionTypeId:
+                Category: Approval
+                Owner: AWS
+                Provider: Manual
+                Version: 1
+              RunOrder: 1
+
+  # A pipeline with multiple git sources.
+  MultiSourcePipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-MULTI-SOURCE-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+
+            - Name: Source1
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput1
+
+            - Name: Source2
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubAdditionalRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput2
+
+        - Name: Actions
+          Actions:
+
+            - Name: Action
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+  # A pipeline with LOTS of actions.
+  BusyPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-BUSY-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeStarSourceConnection
+                Version: 1
+              Configuration:
+                ConnectionArn: !Ref CodeStarConnection
+                DetectChanges: true
+                FullRepositoryId: !Ref GitHubRepositoryPath
+                BranchName: !Ref BranchName
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Actions
+          Actions:
+
+            - Name: Action1
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action2
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action3
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action4
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action5
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action6
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action7
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action8
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action9
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action10
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action11
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action12
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action13
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action14
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action15
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action16
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action17
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action18
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action19
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action20
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action21
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action22
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action23
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action24
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action25
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action26
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action27
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action28
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action29
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action30
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action31
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action32
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action33
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action34
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action35
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action36
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action37
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action38
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action39
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action40
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action41
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action42
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action43
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action44
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action45
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action46
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action47
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action48
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action49
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action50
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 4
+
+        - Name: MoreActions
+          Actions:
+
+            - Name: Action1
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action2
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action3
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action4
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action5
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+        - Name: EvenMoreActions
+          Actions:
+
+            - Name: Action1
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action2
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action3
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action4
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action5
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action6
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action7
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action8
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action9
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 1
+
+            - Name: Action10
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 2
+
+            - Name: Action11
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 3
+
+            - Name: Action12
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 4
+
+            - Name: Action13
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 5
+
+            - Name: Action14
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 6
+
+            - Name: Action15
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 7
+
+            - Name: Action16
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 8
+
+            - Name: Action17
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 9
+
+            - Name: Action18
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 10
+
+  # S3 source action, Lambda invoke action.
+  # TODO: Step Functions invoke action.
+  # TODO: Cross-region & cross-account CloudFormation deploy actions.
+  # TODO: S3 deploy action.
+  AssortedPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub ${Namespace}-ASSORTED-pipeline
+      RoleArn: !GetAtt CodePipelineRole.Arn
+
+      ArtifactStores:
+        - Region: !Ref AWS::Region
+          ArtifactStore:
+            Type: S3
+            Location: !Ref ArtifactsBucket
+
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: S3
+                Version: 1
+              Configuration:
+                S3Bucket: !Ref ArtifactsBucket
+                S3ObjectKey: TestObject
+                PollForSourceChanges: true
+              OutputArtifacts:
+                - Name: SourceOutput
+
+        - Name: Actions
+          Actions:
+            - Name: LambdaAction
+              ActionTypeId:
+                Category: Invoke
+                Owner: AWS
+                Provider: Lambda
+                Version: 1
+              Configuration:
+                FunctionName: !Ref LambdaFunction
+              RunOrder: 4
+
+  # TODO:
+  # - CodeDeploy deploy action
+  # - ECS deploy action
+
+  #######################
+  # Supporting resources
+  #######################
+
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      LifecycleConfiguration:
+        Rules:
+          - Id: MainRule
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
+  GoodCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-GOOD-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - true
+      TimeoutInMinutes: 5
+
+  BadCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-BAD-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - false
+      TimeoutInMinutes: 5
+
+  FlakyCodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub ${Namespace}-FLAKY-project
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        Image: aws/codebuild/standard:6.0
+        ComputeType: BUILD_GENERAL1_SMALL
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: |
+          version: 0.2
+          env:
+            shell: bash
+          phases:
+            build:
+              commands:
+                - RAND="$((0 + $RANDOM % 2))"  # Returns 0 or 1.
+                - if [[ "${RAND}" -eq 1 ]]; then true; else false; fi
+      TimeoutInMinutes: 5
+
+  # CodeDeployApplication:
+  #   Type: AWS::CodeDeploy::Application
+  #   Properties:
+
+  CodeStarConnection:
+    Type: AWS::CodeStarConnections::Connection
+    Properties:
+      ConnectionName: !Sub ${Namespace}-github
+      ProviderType: GitHub
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ${Namespace}-throwaway-function
+      Handler: index.handler
+      Role: !GetAtt LambdaFunctionRole.Arn
+      Runtime: python3.7
+      Timeout: 3
+      Code:
+        ZipFile: |
+          import boto3
+
+
+          def handler(event, context):
+            boto3.client('codepipeline').put_job_success_result(
+              jobId=event['CodePipeline.job']['id']
+            )
+
+  # StateMachine:
+  #   Type: AWS::StepFunctions::StateMachine
+  #   Properties:
+  #     RoleArn: !GetAtt StateMachineRole.Arn
+
+  #######################
+  # IAM roles
+  #######################
+
+  WaitForIAMResources:
+    Type: AWS::CloudFormation::WaitCondition
+    DependsOn:
+      - CodePipelineRole
+      - CloudFormationRole
+    Properties:
+      Handle: !Ref WaitForIAMResourcesHandle
+      Count: 0
+      Timeout: 30
+
+  WaitForIAMResourcesHandle:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Namespace}-CloudFormationRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: cloudformation.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - codebuild:CreateProject
+                  - codebuild:DeleteProject
+                  - codebuild:UpdateProject*
+                  - codepipeline:CreatePipeline
+                  - codepipeline:DeletePipeline
+                  - codepipeline:GetPipeline*
+                  - codepipeline:StartPipelineExecution
+                  - codepipeline:UpdatePipeline
+                  - codestar-connections:CreateConnection
+                  - codestar-connections:DeleteConnection
+                  - codestar-connections:GetConnection
+                  - codestar-connections:ListTagsForResource
+                  - codestar-connections:PassConnection
+                  - iam:AttachRolePolicy
+                  - iam:CreatePolicy*
+                  - iam:CreateRole*
+                  - iam:DeletePolicy*
+                  - iam:DeleteRole*
+                  - iam:DetachRolePolicy
+                  - iam:GetPolicy*
+                  - iam:GetRole*
+                  - iam:List*
+                  - iam:PutRole*
+                  - iam:SetDefaultPolicyVersion
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                  - lambda:AddPermission
+                  - lambda:CreateFunction
+                  - lambda:DeleteFunction
+                  - lambda:GetFunction
+                  - lambda:PutFunction*
+                  - lambda:RemovePermission
+                  - lambda:UpdateFunction*
+                  - s3:CreateBucket
+                  - s3:DeleteBucket*
+                  - s3:GetLifecycleConfiguration
+                  - s3:PutBucket*
+                  - s3:PutLifecycleConfiguration
+                Resource: '*'
+
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CodeBuildRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CodePipelineRole
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-LambdaRole
+
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Namespace}-CodeBuildRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${Namespace}-*
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:PutObject*
+                Resource: !Sub arn:${AWS::Partition}:s3:::${ArtifactsBucket}/*
+
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Namespace}-CodePipelineRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+
+              - Effect: Allow
+                Action: codestar-connections:UseConnection
+                Resource: !Ref CodeStarConnection
+
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:DeleteStack
+                  - cloudformation:DescribeStacks
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:SetStackPolicy
+                  - cloudformation:ValidateTemplate
+                  - codebuild:BatchGetBuilds
+                  - codebuild:StartBuild
+                  - lambda:InvokeFunction
+                Resource: '*'
+
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${Namespace}-CloudFormationRole
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: cloudformation.amazonaws.com
+
+              - Effect: Allow
+                Action: s3:GetBucket*
+                Resource: !GetAtt ArtifactsBucket.Arn
+
+              - Effect: Allow
+                Action:
+                  - s3:GetObject*
+                  - s3:PutObject*
+                Resource: !Sub ${ArtifactsBucket.Arn}/*
+
+  LambdaFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${Namespace}-LambdaRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+
+              - Effect: Allow
+                Action:
+                  - codepipeline:PutJob*Result
+                  - logs:CreateLogGroup
+                  - xray:PutTelemetryRecords
+                  - xray:PutTraceSegments
+                Resource: '*'
+
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${Namespace}-*
+
+  # StateMachineRole:
+  #   Type: AWS::IAM::Role
+  #   Properties:
+  #     AssumeRolePolicyDocument:
